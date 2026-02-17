@@ -1,0 +1,82 @@
+import streamlit as st
+import qrcode
+import pandas as pd
+import datetime
+import os
+from fpdf import FPDF
+from PIL import Image
+from io import BytesIO
+
+# --- DATOS FIJOS DE TU EMPRESA (Edita esto con tus datos reales) ---
+EMPRESA = {
+    "nombre": "TU EMPRESA DE FUMIGACIÓN",
+    "cuit": "30-XXXXXXXX-X",
+    "direccion": "Tu Dirección Real 123",
+    "permisos": "Res. Municipal 102/26 - Hab. Sanitaria",
+}
+
+# --- FUNCIÓN PARA GENERAR EL PDF ---
+def crear_pdf(datos, qr_img):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.rect(5, 5, 200, 287) # Recuadro estético
+    
+    # Encabezado
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, EMPRESA["nombre"], ln=True, align='C')
+    pdf.set_font("Arial", '', 10)
+    pdf.cell(0, 5, f"CUIT: {EMPRESA['cuit']} | {EMPRESA['direccion']}", ln=True, align='C')
+    pdf.cell(0, 5, f"Permisos: {EMPRESA['permisos']}", ln=True, align='C')
+    pdf.ln(10)
+    
+    # Título
+    pdf.set_font("Arial", 'B', 20)
+    pdf.cell(0, 15, f"CERTIFICADO DE {datos['Servicio'].upper()}", ln=True, align='C')
+    pdf.ln(5)
+    
+    # Detalles
+    pdf.set_font("Arial", '', 12)
+    pdf.multi_cell(0, 10, f"Certificamos el servicio de {datos['Servicio']} realizado para {datos['Cliente']} en {datos['Dirección']}.")
+    pdf.ln(5)
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(0, 10, "Detalles Técnicos:", ln=True)
+    pdf.set_font("Arial", '', 11)
+    pdf.cell(0, 8, f"- Fecha: {datos['Fecha']}", ln=True)
+    pdf.cell(0, 8, f"- Productos: {datos['Productos']}", ln=True)
+    pdf.cell(0, 8, f"- Vencimiento: {datos['Vencimiento']}", ln=True)
+    
+    # Insertar QR
+    qr_path = "temp_qr.png"
+    qr_img.save(qr_path)
+    pdf.image(qr_path, x=150, y=100, w=40)
+    
+    return pdf.output(dest='S').encode('latin-1')
+
+# --- INTERFAZ ---
+st.title("🛡️ Generador de Certificados")
+
+with st.form("form"):
+    cliente = st.text_input("Cliente")
+    direccion = st.text_input("Dirección")
+    servicio = st.selectbox("Servicio", ["Desratización", "Desinfección"])
+    productos = st.multiselect("Productos", ["Deltametrina", "Bromadiolona", "Cipermetrina"])
+    btn = st.form_submit_button("Generar Certificado")
+
+if btn:
+    datos = {
+        "Fecha": datetime.date.today(), "Cliente": cliente, "Dirección": direccion,
+        "Servicio": servicio, "Productos": ", ".join(productos), 
+        "Vencimiento": datetime.date.today() + datetime.timedelta(days=30)
+    }
+    
+    # QR con color según servicio
+    color = "green" if servicio == "Desratización" else "blue"
+    qr = qrcode.QRCode(box_size=10, border=1)
+    qr.add_data(f"Certificado {servicio} - {cliente}")
+    qr.make(fit=True)
+    img_qr = qr.make_image(fill_color=color, back_color="white")
+    
+    pdf_bytes = crear_pdf(datos, img_qr)
+    
+    st.success("¡Certificado creado!")
+    st.download_button("📥 Descargar PDF", data=pdf_bytes, file_name="Certificado.pdf")
